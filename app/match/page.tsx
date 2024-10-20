@@ -21,23 +21,69 @@ import {
 } from "@ethsign/sp-sdk";
 import { ethers } from 'ethers';
 
+
+const indexing = "socialfly_app_0";
+
+
+interface EncryptedData {
+    ciphertext: string;
+    dataToEncryptHash: string;
+}
+
 interface UserProfile {
     address: string;
     photo: string;
-    location: string;
     profileText: string;
 }
+
+const accessControlConditions = [
+    {
+        contractAddress: '',
+        standardContractType: '',
+        chain: 'sepolia',
+        method: 'eth_getBalance',
+        parameters: [
+            ':userAddress',
+            'latest'
+        ],
+        returnValueTest: {
+            comparator: '>=',
+            value: '0'
+        }
+    }
+]
 
 const code = `(async () => {
   const resp = await Lit.Actions.decryptAndCombine({
     accessControlConditions,
-    ciphertext,
-    dataToEncryptHash,
+    ciphertext: ciphertextLoc,
+    dataToEncryptHash: dataToEncryptHashLoc,
     authSig: null,
     chain: 'ethereum',
   });
-  Lit.Actions.setResponse({ response: resp });
+    const parsedData = JSON.parse(resp);
+    const latitude = parseFloat(parsedData.latitude);
+    const longitude = parseFloat(parsedData.longitude);
+    const diffLat = latitude - parseFloat(myLatitude);
+    const diffLong = longitude - parseFloat(myLongitude);
+    const distance = Math.sqrt(diffLat * diffLat + diffLong * diffLong);
+    if (distance > 50) {
+        Lit.Actions.setResponse({ response: "Too far away!" });
+    }
+    else {
+        const resp2 = await Lit.Actions.decryptAndCombine({
+            accessControlConditions,
+            ciphertext: ciphertextBio,
+            dataToEncryptHash: dataToEncryptHashBio,
+            authSig: null,
+            chain: 'ethereum',
+        });
+        Lit.Actions.setResponse({ response: resp2 });
+    }
 })();`
+
+const encryptedLocMap: Record<string, EncryptedData> = {};
+const encryptedBioMap: Record<string, EncryptedData> = {};
 
 export default function MatchPage() {
     const [addresses, setAddresses] = useState<string[]>([]);
@@ -49,33 +95,19 @@ export default function MatchPage() {
         debug: true
     });
 
-    const fetchData = async () => {
-
+    const fetchData = async (ciphertextLoc: string, dataToEncryptHashLoc: string,
+        ciphertextBio: string, dataToEncryptHashBio: string,
+        myLatitude: string, myLongitude: string
+    ) => {
         await client.connect();
+        // NEXT_PUBLIC_PK
         const PK = process.env.NEXT_PUBLIC_PK;
+        // const wallet = await genWallet();
 
         const ethersWallet = new ethers.Wallet(
-            PK,
+            PK, // Make sure to set this in your .env file
             new ethers.providers.JsonRpcProvider(LIT_RPC.CHRONICLE_YELLOWSTONE)
         );
-
-        const ciphertext = "pzmZ4DmdRp35cUKO6Cg2xfFWiyXalB5rYzO847Tk/KKYLHVIwQlXy2XgjTzktVg0IHXd9Lg5MWatwmhmqmkEKHfmuwjk+EA3oAg6m4auamsgej88MqYTq5qygvnvDwSausmmk2bqs/bo/TaAYf/og9EC";
-        const dataToEncryptHash = "64ec88ca00b268e5ba1a35678a1b5316d212f4f366b2477232534a8aeca37f3c";
-
-        const chain = 'ethereum';
-        const accessControlConditions = [
-            {
-                contractAddress: '',
-                standardContractType: '',
-                chain,
-                method: 'eth_getBalance',
-                parameters: [':userAddress', 'latest'],
-                returnValueTest: {
-                    comparator: '>=',
-                    value: '0',
-                },
-            },
-        ];
 
         ///////// session sigs...
 
@@ -91,7 +123,7 @@ export default function MatchPage() {
                     resource: new LitAccessControlConditionResource(
                         await LitAccessControlConditionResource.generateResourceString(
                             accessControlConditions,
-                            dataToEncryptHash
+                            dataToEncryptHashLoc
                         )
                     ),
                     ability: LitAbility.AccessControlConditionDecryption,
@@ -123,31 +155,71 @@ export default function MatchPage() {
             sessionSigs: sessionSigs, // your session
             jsParams: {
                 accessControlConditions,
-                ciphertext,
-                dataToEncryptHash
+                ciphertextLoc,
+                dataToEncryptHashLoc,
+                ciphertextBio,
+                dataToEncryptHashBio,
+                myLatitude,
+                myLongitude
             }
         });
-        console.log("decrypted content sent from lit action:", res);
 
+        console.log("decrypted content sent from lit action:", res);
         await client.disconnect();
+        return res;
     }
 
-
-    const fetchUserIds = async (): Promise<string[]> => {
-        // Replace this with your actual API call to fetch user IDs
-        return ['user1', 'user2', 'user3', 'user4', 'user5'];
-    };
-
-    // Placeholder function to fetch user profile
     const fetchUserProfile = async (address: string): Promise<UserProfile> => {
         console.log("Fetching user profile for user: " + address)
-        // Replace this with your actual API call to fetch user profile details
-        return {
-            address,
-            photo: 'https://via.placeholder.com/150',
-            location: 'Sample Location',
-            profileText: 'This is a sample profile text.'
-        };
+
+        // print keys in encryptedDataMap
+        //console.log(Object.keys(encryptedDataMap));
+        const location = encryptedLocMap[address];
+        const bio = encryptedBioMap[address];
+        console.log(location);
+        console.log(bio);
+
+        // const locationRes = await fetchData(location.ciphertext, location.dataToEncryptHash);
+        // const bioRes = await fetchData(bio.ciphertext, bio.dataToEncryptHash);
+
+        // Get our live location
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(asyncSuccessCallback, errorCallback);
+        } else {
+            console.error("Geolocation is not supported by this browser.");
+        }
+
+
+        async function asyncSuccessCallback(position) {
+            try {
+                const latitude = position.coords.latitude;
+                const longitude = position.coords.longitude;
+                console.log(`Latitude: ${latitude}, Longitude: ${longitude}`);
+
+                const res = await fetchData(location.ciphertext, location.dataToEncryptHash, bio.ciphertext, bio.dataToEncryptHash, latitude, longitude);
+                console.log(res);
+                //console.log(bioRes);
+                const newUserProfile = {
+                    address,
+                    photo: 'https://via.placeholder.com/150',
+                    profileText: res.response
+                };
+                setCurrentUser(newUserProfile);
+
+
+            } catch (error) {
+                console.error("Error during async operation:", error);
+            }
+        }
+
+        function errorCallback(error) {
+            console.error(`Error: ${error.message}`);
+        }
+
+
+
+
+
     };
 
     useEffect(() => {
@@ -158,7 +230,8 @@ export default function MatchPage() {
             // const att = await indexingClient.queryAttestation(`onchain_evm_${chainId}_${attId}`);
             //const schemaId_full = "onchain_evm_84532_0x300";
             const schemaId_location = "onchain_evm_84532_0x38b";
-            const indexing = "socialfly_app";
+            const schemaId_bio = "onchain_evm_84532_0x389"
+
             // const res0 = await indexingClient.querySchema(schemaId_location);
             // console.log(res0);
             const res = await indexingClient.queryAttestationList({
@@ -169,7 +242,34 @@ export default function MatchPage() {
                 mode: "onchain",
                 indexingValue: indexing,
             });
-            console.log(res);
+            // Get set of attesters from res.rows
+            const attesters = new Set(res!.rows.map(row => row.attester));
+            // Now make it a list
+            setAddresses(Array.from(attesters));
+            // Now we need a map from each address to the location and bio
+            for (const item of res!.rows) {
+                const address = item.attester;
+                const dec = decodeOnChainData(item.data, DataLocationOnChain.ONCHAIN, item.schema.data as SchemaItem[]);
+                // console.log(dec)
+                // And now fill in our map
+                if (item.fullSchemaId == schemaId_location) {
+                    console.log("location found!", address)
+                    encryptedLocMap[address] = { ciphertext: dec.ciphertext, dataToEncryptHash: dec.dataToEncryptHash };
+                }
+                else if (item.fullSchemaId == schemaId_bio) {
+                    console.log("bio found!")
+                    encryptedBioMap[address] = { ciphertext: dec.ciphertext, dataToEncryptHash: dec.dataToEncryptHash };
+                }
+
+            }
+
+            // use attester and id to create two arrays that match up?
+            // filter out our own address
+
+            // yeah then work on the decryption condition, same logic..
+
+
+
 
             //const ids = await fetchUserIds();
             //setAddresses(ids);
@@ -198,10 +298,6 @@ export default function MatchPage() {
     const handleRightClick = async () => {
 
         console.log("Right click...")
-
-        // Temp - make sure we can call the decrypt...
-        await fetchData();
-
 
         if (currentUserIndex < addresses.length - 1) {
             const newIndex = currentUserIndex + 1;
