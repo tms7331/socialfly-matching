@@ -99,7 +99,8 @@ function SendTransaction() {
         "function setApproval(string ipfsCid, bool value) public",
       ];
       const contract = new ethers.Contract(contractAddress, contractABI, signer);
-      const tx = await contract.setApproval("abcd", true);
+      const cid = "QmSw3vJ9B1V1LwgD8Zmokj2xZ68FeSu45qAv47puC8mAei";
+      const tx = await contract.setApproval(cid, true);
 
       console.log('Transaction hash:', tx.hash);
       window.location.href = '/match';
