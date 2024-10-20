@@ -1,8 +1,8 @@
 "use client"
 import { useState, useEffect } from 'react';
 import { LitNetwork, LIT_RPC } from "@lit-protocol/constants";
-import { LitActionResource, createSiweMessageWithRecaps } from "@lit-protocol/auth-helpers";
-import { LitNodeClient, encryptString } from "@lit-protocol/lit-node-client";
+import { LitActionResource } from "@lit-protocol/auth-helpers";
+import { LitNodeClient } from "@lit-protocol/lit-node-client";
 import {
     createSiweMessage,
     generateAuthSig,
@@ -10,13 +10,9 @@ import {
     LitAccessControlConditionResource,
 } from "@lit-protocol/auth-helpers";
 import {
-    SignProtocolClient,
-    SpMode,
-    EvmChains,
     IndexService,
     decodeOnChainData,
     DataLocationOnChain,
-    chainInfo,
     SchemaItem
 } from "@ethsign/sp-sdk";
 import { ethers } from 'ethers';
@@ -308,23 +304,41 @@ export default function MatchPage() {
     };
 
     return (
-        <div style={{ textAlign: 'center', marginTop: '50px' }}>
+        <div className="flex flex-col items-center mt-12">
             {currentUser && (
-                <div>
-                    <img src={currentUser.photo} alt="User Profile" style={{ width: '150px', borderRadius: '50%' }} />
-                    <p>{currentUser.profileText}</p>
+                <div className="flex flex-col items-center">
+                    <img
+                        src={currentUser.photo}
+                        alt="User Profile"
+                        className="w-36 h-36 rounded-full object-cover"
+                    />
+                    <p className="mt-4 text-lg">{currentUser.profileText}</p>
                 </div>
             )}
-            <div>
-                <button onClick={handleLeftClick} disabled={currentUserIndex === 0}>
+            <div className="flex mt-6 space-x-4">
+                <button
+                    onClick={handleLeftClick}
+                    disabled={currentUserIndex === 0}
+                    className="px-4 py-2 bg-blue-500 text-white rounded-md disabled:bg-gray-300"
+                >
                     Left
                 </button>
-                <button onClick={() => alert('Connect button clicked')}>Connect</button>
-                <button onClick={handleRightClick} disabled={currentUserIndex === addresses.length - 1}>
+                <button
+                    onClick={() => alert("For now you'll have to imagine you connected")}
+                    className="px-4 py-2 bg-green-500 text-white rounded-md"
+                >
+                    Connect
+                </button>
+                <button
+                    onClick={handleRightClick}
+                    disabled={currentUserIndex === addresses.length - 1}
+                    className="px-4 py-2 bg-blue-500 text-white rounded-md disabled:bg-gray-300"
+                >
                     Right
                 </button>
             </div>
         </div>
+
     );
 };
 
